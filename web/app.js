@@ -1278,11 +1278,24 @@ function copyAIPrompt() {
 
 // ==================== Settings / Semester Start ====================
 async function loadSettings() {
-  const ss = await db.getSetting('semesterStart');
-  if (ss) semesterStart = new Date(ss);
-  const ts = await db.getSetting('timeSlots');
-  if (ts) {
-    try { TIME_SLOTS = JSON.parse(ts); } catch(e) {}
+  try {
+    const ss = await db.getSetting('semesterStart');
+    if (ss) { semesterStart = new Date(ss); localStorage.setItem('semesterStart', ss); }
+    else {
+      const cached = localStorage.getItem('semesterStart');
+      if (cached) semesterStart = new Date(cached);
+    }
+    const ts = await db.getSetting('timeSlots');
+    if (ts) { TIME_SLOTS = JSON.parse(ts); localStorage.setItem('timeSlots', ts); }
+    else {
+      const cached = localStorage.getItem('timeSlots');
+      if (cached) TIME_SLOTS = JSON.parse(cached);
+    }
+  } catch(e) {
+    const ss = localStorage.getItem('semesterStart');
+    if (ss) semesterStart = new Date(ss);
+    const ts = localStorage.getItem('timeSlots');
+    if (ts) TIME_SLOTS = JSON.parse(ts);
   }
 }
 
@@ -1311,6 +1324,7 @@ async function saveSettings() {
   if (val) {
     semesterStart = new Date(val);
     await db.setSetting('semesterStart', val);
+    localStorage.setItem('semesterStart', val);
   }
   closeModal();
   renderSchedule();
@@ -1409,7 +1423,9 @@ async function saveTimeSlots() {
     return { period: s.period, startH: sh, startM: sm, endH: eh, endM: em };
   });
   TIME_SLOTS = slots;
-  await db.setSetting('timeSlots', JSON.stringify(slots));
+  const json = JSON.stringify(slots);
+  await db.setSetting('timeSlots', json);
+  localStorage.setItem('timeSlots', json);
   closeModal();
   renderSchedule();
 }
@@ -1417,6 +1433,7 @@ async function saveTimeSlots() {
 async function resetTimeSlots() {
   TIME_SLOTS = DEFAULT_SLOTS.map(s => ({...s}));
   await db.setSetting('timeSlots', null);
+  localStorage.removeItem('timeSlots');
   closeModal();
   renderSchedule();
 }
@@ -1443,10 +1460,13 @@ async function init() {
     if (e.target.classList.contains('detail-overlay')) closeDetail();
   });
 
-  // Load sample data if empty
-  const items = await db.getAllSchedule();
-  if (items.length === 0) {
-    await loadSampleData();
+  // Only load sample data on first-ever visit (use localStorage as reliable indicator)
+  if (!localStorage.getItem('lifeAppInitialized')) {
+    const existing = await db.getAllTodos();
+    if (existing.length === 0) {
+      await loadSampleData();
+    }
+    localStorage.setItem('lifeAppInitialized', '1');
   }
 
   navigate('home');
